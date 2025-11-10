@@ -32,14 +32,36 @@ const client = new Client({
 });
 
 const LINK_REGEX = /(https?:\/\/[^\s]+)/gi;
+let guild; // Will hold your main guild reference
 
-client.once(Events.ClientReady, () => {
+// -------------------------
+// On Ready
+// -------------------------
+client.once(Events.ClientReady, async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
+
+  const guildId = process.env.GUILD_ID;
+  if (guildId) {
+    guild = client.guilds.cache.get(guildId);
+    if (!guild) {
+      console.warn('⚠️ Guild not found, will auto-detect later.');
+    } else {
+      console.log(`🏠 Connected to guild: ${guild.name} (${guild.id})`);
+    }
+  } else {
+    console.log('ℹ️ No GUILD_ID set, bot will handle multiple guilds dynamically.');
+  }
 });
 
-// Delete links from non-admins
+// -------------------------
+// Message Handler: Delete Links from Non-Admins
+// -------------------------
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
+  if (!message.guild) return;
+
+  // Use main guild variable if not set
+  if (!guild) guild = message.guild;
 
   if (LINK_REGEX.test(message.content)) {
     const member = message.member;
@@ -50,14 +72,16 @@ client.on(Events.MessageCreate, async (message) => {
       await message.author.send(
         `⚠️ Your message in **${message.guild.name}** was removed because posting links is not allowed.`
       );
-      console.log(`Deleted message with link from ${message.author.tag}`);
+      console.log(`🗑️ Deleted message with link from ${message.author.tag} in ${message.guild.name}`);
     } catch (err) {
-      console.error('Error deleting message or sending DM:', err);
+      console.error('❌ Error deleting message or sending DM:', err);
     }
   }
 });
 
-// Slash command interactions
+// -------------------------
+// Slash Command Handler
+// -------------------------
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
@@ -65,7 +89,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   // Only allow admins
   if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-    return interaction.reply({ content: '❌ You do not have permission to use this command.', ephemeral: true });
+    return interaction.reply({
+      content: '❌ You do not have permission to use this command.',
+      ephemeral: true
+    });
   }
 
   try {
@@ -100,4 +127,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
+// -------------------------
+// Login
+// -------------------------
 client.login(process.env.TOKEN);
